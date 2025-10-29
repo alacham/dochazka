@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Admin & Reports - Attendance System{% endblock %}
+
+{% block content %}
+<h1>Admin & Reports</h1>
+
+{% if message %}
+    <div class="confirmation">
+        {{ message }}
+    </div>
+{% endif %}
+
+<!-- Attendance Reports Section -->
+<div class="admin-section">
+    <h2>Attendance Reports & Export</h2>
+    
+    <form method="GET" action="{{ url_for('admin_page') }}">
+        <div class="form-group">
+            <label>Start Date: </label>
+            <input type="date" name="start_date" value="{{ start_date }}">
+            <label style="margin-left: 20px;">End Date: </label>
+            <input type="date" name="end_date" value="{{ end_date }}">
+        </div>
+        
+        <div class="form-group">
+            <label>Employee: </label>
+            <select name="employee_filter">
+                <option value="">All Employees</option>
+                {% for emp in all_employees %}
+                    <option value="{{ emp.name }}" {% if emp.name == employee_filter %}selected{% endif %}>
+                        {{ emp.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="btn">Apply Filters</button>
+        <a href="{{ url_for('export_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
+           class="btn btn-success" style="margin-left: 10px;">Export to CSV</a>
+    </form>
+    
+    {% if attendance_records %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee Name</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in attendance_records %}
+                <tr>
+                    <td>{{ record.employee_name }}</td>
+                    <td>{{ record.status }}</td>
+                    <td>{{ record.date }}</td>
+                    <td>{{ record.time }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No attendance records found for the selected criteria.</p>
+    {% endif %}
+</div>
+
+<!-- Employee Management Section -->
+<div class="admin-section">
+    <h2>Employee Management</h2>
+    
+    <h3>Add New Employee</h3>
+    <form method="POST" action="{{ url_for('add_employee') }}">
+        <div class="form-group">
+            <input type="text" name="employee_name" placeholder="New Employee Name" required>
+            <button type="submit" class="btn btn-success" style="margin-left: 10px;">Add Employee</button>
+        </div>
+    </form>
+    
+    <h3>Manage Existing Employees</h3>
+    {% if all_employees %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee Name</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in all_employees %}
+                <tr>
+                    <td>{{ employee.name }}</td>
+                    <td>
+                        {% if employee.is_active %}
+                            <span style="color: green;">Active</span>
+                        {% else %}
+                            <span style="color: red;">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if employee.is_active %}
+                            <form method="POST" action="{{ url_for('toggle_employee', employee_id=employee.id) }}" style="display: inline;">
+                                <input type="hidden" name="action" value="disable">
+                                <button type="submit" class="btn btn-danger">Disable</button>
+                            </form>
+                        {% else %}
+                            <form method="POST" action="{{ url_for('toggle_employee', employee_id=employee.id) }}" style="display: inline;">
+                                <input type="hidden" name="action" value="enable">
+                                <button type="submit" class="btn btn-success">Enable</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No employees found.</p>
+    {% endif %}
+</div>
+
+<div class="navigation">
+    <a href="{{ url_for('home') }}" class="btn btn-secondary">Back to Home</a>
+</div>
+{% endblock %}

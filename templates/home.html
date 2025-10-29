@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Attendance System{% endblock %}
+
+{% block content %}
+<h1>Employee Attendance System</h1>
+<p style="text-align: center; color: #666;">Welcome, {{ current_user }}!</p>
+
+<h2>Select an Employee:</h2>
+{% if employees %}
+    <ul class="employee-list">
+        {% for employee in employees %}
+            <li><a href="{{ url_for('action_page', employee_name=employee.name) }}">{{ employee.name }}</a></li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>No active employees found. <a href="{{ url_for('admin_page') }}">Add employees in Admin</a>.</p>
+{% endif %}
+
+<div class="navigation">
+    <a href="{{ url_for('admin_page') }}" class="btn btn-secondary">Admin & Reports</a>
+</div>
+{% endblock %}

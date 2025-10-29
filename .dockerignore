@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Database files (will be in mounted volume)
+*.db
+*.sqlite
+*.sqlite3
+
+# Development files
+.git/
+.gitignore
+*.md
+test_system.py
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

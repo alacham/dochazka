@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  attendance-app:
+    build: .
+    container_name: attendance-system
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persist database outside container
+      - ./data:/app/data
+    env_file:
+      - .env.example  # Change to .env for custom configuration
+    environment:
+      - DATABASE=/app/data/attendance.db
+      - FLASK_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  attendance-data:
