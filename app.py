@@ -12,9 +12,11 @@ import io
 import os
 try:
     # Try to import local config file
-    from config import USERNAME, PASSWORD, DATABASE_PATH, TIMEZONE_NAME, SECRET_KEY, DEBUG as CONFIG_DEBUG
+    from config import USERNAME, PASSWORD, DATABASE_PATH, TIMEZONE_NAME, SECRET_KEY, DEBUG as CONFIG_DEBUG, PORT, HOST
     DATABASE = os.getenv('DATABASE', DATABASE_PATH)
     TIMEZONE = pytz.timezone(TIMEZONE_NAME)
+    APP_PORT = int(os.getenv('PORT', PORT))
+    APP_HOST = os.getenv('HOST', HOST)
 except ImportError:
     # Fallback to environment variables or defaults
     USERNAME = os.getenv('ATTENDANCE_USERNAME', 'admin')
@@ -23,6 +25,8 @@ except ImportError:
     TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Prague'))
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     CONFIG_DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+    APP_PORT = int(os.getenv('PORT', '5000'))
+    APP_HOST = os.getenv('HOST', '127.0.0.1')
 
 
 # --- Application Setup ---
@@ -322,8 +326,8 @@ if __name__ == '__main__':
     is_production = os.getenv('FLASK_ENV') == 'production'
     
     if is_production:
-        # Production settings for Docker
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        # Production settings for Docker - use environment variables for host/port
+        app.run(host=APP_HOST, port=APP_PORT, debug=False)
     else:
-        # Development settings - use config file debug setting
-        app.run(debug=CONFIG_DEBUG)
+        # Development settings - use config file settings
+        app.run(host=APP_HOST, port=APP_PORT, debug=CONFIG_DEBUG)

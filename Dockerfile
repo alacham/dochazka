@@ -27,8 +27,8 @@ USER appuser
 # Create volume for database persistence
 VOLUME ["/app/data"]
 
-# Expose port 5000
-EXPOSE 5000
+# Expose configurable port (default 5000)
+EXPOSE ${PORT:-5000}
 
 # Initialize database and start the application
 CMD ["sh", "-c", "python -c 'from app import init_db; init_db()' 2>/dev/null || true && python app.py"]

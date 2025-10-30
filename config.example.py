@@ -14,3 +14,5 @@ TIMEZONE_NAME = "Europe/Prague"
 # Flask settings
 DEBUG = True
 SECRET_KEY = "your-secret-key-change-this-in-production"
+PORT = 5000
+HOST = "127.0.0.1"  # Use "0.0.0.0" for Docker or external access

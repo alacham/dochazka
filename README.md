@@ -45,15 +45,37 @@ The database is stored in the `./data` directory on your host machine, so your a
    ```bash
    cp config.example.py config.py
    ```
-2. **Edit `config.py`** to set your credentials and settings
+2. **Edit `config.py`** to set your credentials, port, and other settings
 
 #### For Docker Deployment:
 1. **Copy the environment template:**
    ```bash
    cp .env.example .env
    ```
-2. **Edit `.env`** to set your credentials and settings
+2. **Edit `.env`** to set your credentials, ports, and other settings
 3. **Update docker-compose.yml** to use `.env` instead of `.env.example`
+
+#### Port Configuration Examples:
+
+**Local Development (different port):**
+```python
+# In config.py
+PORT = 8080
+HOST = "127.0.0.1"
+```
+
+**Docker (behind reverse proxy):**
+```bash
+# In .env
+PORT=5000          # Internal container port
+HOST_PORT=8080     # External host port
+HOST=0.0.0.0       # Listen on all interfaces
+```
+
+**Quick Docker port change:**
+```bash
+HOST_PORT=8080 docker-compose up -d
+```
 
 ### Default Credentials
 
