@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Admin & Reports - Attendance System{% endblock %}
+{% block title %}Administrace a Reporty - Systém Docházky{% endblock %}
 
 {% block content %}
-<h1>Admin & Reports</h1>
+<h1>Administrace a Reporty</h1>
 
 {% if message %}
     <div class="confirmation">
@@ -13,20 +13,20 @@
 
 <!-- Attendance Reports Section -->
 <div class="admin-section">
-    <h2>Attendance Reports & Export</h2>
+    <h2>Reporty Docházky a Export</h2>
     
     <form method="GET" action="{{ url_for('admin_page') }}">
         <div class="form-group">
-            <label>Start Date: </label>
+            <label>Počáteční datum: </label>
             <input type="date" name="start_date" value="{{ start_date }}">
-            <label style="margin-left: 20px;">End Date: </label>
+            <label style="margin-left: 20px;">Konečné datum: </label>
             <input type="date" name="end_date" value="{{ end_date }}">
         </div>
         
         <div class="form-group">
-            <label>Employee: </label>
+            <label>Zaměstnanec: </label>
             <select name="employee_filter">
-                <option value="">All Employees</option>
+                <option value="">Všichni zaměstnanci</option>
                 {% for emp in all_employees %}
                     <option value="{{ emp.name }}" {% if emp.name == employee_filter %}selected{% endif %}>
                         {{ emp.name }}
@@ -35,26 +35,26 @@
             </select>
         </div>
         
-        <button type="submit" class="btn">Apply Filters</button>
+        <button type="submit" class="btn">Použít filtry</button>
         <a href="{{ url_for('export_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
-           class="btn btn-success" style="margin-left: 10px;">Export to CSV</a>
+           class="btn btn-success" style="margin-left: 10px;">Exportovat do CSV</a>
     </form>
     
     {% if attendance_records %}
         <table>
             <thead>
                 <tr>
-                    <th>Employee Name</th>
-                    <th>Status</th>
-                    <th>Date</th>
-                    <th>Time</th>
+                    <th>Jméno zaměstnance</th>
+                    <th>Stav</th>
+                    <th>Datum</th>
+                    <th>Čas</th>
                 </tr>
             </thead>
             <tbody>
                 {% for record in attendance_records %}
                 <tr>
                     <td>{{ record.employee_name }}</td>
-                    <td>{{ record.status }}</td>
+                    <td>{% if record.status == "Enter" %}Příchod{% else %}Odchod{% endif %}</td>
                     <td>{{ record.date }}</td>
                     <td>{{ record.time }}</td>
                 </tr>
@@ -62,30 +62,30 @@
             </tbody>
         </table>
     {% else %}
-        <p>No attendance records found for the selected criteria.</p>
+        <p>Nebyly nalezeny žádné záznamy docházky pro vybraná kritéria.</p>
     {% endif %}
 </div>
 
 <!-- Employee Management Section -->
 <div class="admin-section">
-    <h2>Employee Management</h2>
+    <h2>Správa zaměstnanců</h2>
     
-    <h3>Add New Employee</h3>
+    <h3>Přidat nového zaměstnance</h3>
     <form method="POST" action="{{ url_for('add_employee') }}">
         <div class="form-group">
-            <input type="text" name="employee_name" placeholder="New Employee Name" required>
-            <button type="submit" class="btn btn-success" style="margin-left: 10px;">Add Employee</button>
+            <input type="text" name="employee_name" placeholder="Jméno nového zaměstnance" required>
+            <button type="submit" class="btn btn-success" style="margin-left: 10px;">Přidat zaměstnance</button>
         </div>
     </form>
     
-    <h3>Manage Existing Employees</h3>
+    <h3>Spravovat stávající zaměstnance</h3>
     {% if all_employees %}
         <table>
             <thead>
                 <tr>
-                    <th>Employee Name</th>
-                    <th>Status</th>
-                    <th>Action</th>
+                    <th>Jméno zaměstnance</th>
+                    <th>Stav</th>
+                    <th>Akce</th>
                 </tr>
             </thead>
             <tbody>
@@ -94,21 +94,21 @@
                     <td>{{ employee.name }}</td>
                     <td>
                         {% if employee.is_active %}
-                            <span style="color: green;">Active</span>
+                            <span style="color: green;">Aktivní</span>
                         {% else %}
-                            <span style="color: red;">Disabled</span>
+                            <span style="color: red;">Neaktivní</span>
                         {% endif %}
                     </td>
                     <td>
                         {% if employee.is_active %}
                             <form method="POST" action="{{ url_for('toggle_employee', employee_id=employee.id) }}" style="display: inline;">
                                 <input type="hidden" name="action" value="disable">
-                                <button type="submit" class="btn btn-danger">Disable</button>
+                                <button type="submit" class="btn btn-danger">Deaktivovat</button>
                             </form>
                         {% else %}
                             <form method="POST" action="{{ url_for('toggle_employee', employee_id=employee.id) }}" style="display: inline;">
                                 <input type="hidden" name="action" value="enable">
-                                <button type="submit" class="btn btn-success">Enable</button>
+                                <button type="submit" class="btn btn-success">Aktivovat</button>
                             </form>
                         {% endif %}
                     </td>
@@ -117,11 +117,11 @@
             </tbody>
         </table>
     {% else %}
-        <p>No employees found.</p>
+        <p>Nebyli nalezeni žádní zaměstnanci.</p>
     {% endif %}
 </div>
 
 <div class="navigation">
-    <a href="{{ url_for('home') }}" class="btn btn-secondary">Back to Home</a>
+    <a href="{{ url_for('home') }}" class="btn btn-secondary">Zpět na úvod</a>
 </div>
 {% endblock %}

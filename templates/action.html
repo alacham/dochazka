@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}{{ employee_name }} - Attendance{% endblock %}
+{% block title %}{{ employee_name }} - Docházka{% endblock %}
 
 {% block content %}
-<h1>Attendance for: {{ employee_name }}</h1>
+<h1>Docházka pro: {{ employee_name }}</h1>
 
 {% if confirmation_message %}
     <div class="confirmation">
@@ -13,20 +13,20 @@
 
 <div style="text-align: center;">
     <p style="font-size: 18px; margin: 20px 0;">
-        Your next action is: <strong>{{ next_action }}</strong>
+        Vaše další akce je: <strong>{% if next_action == "Enter" %}Příchod{% else %}Odchod{% endif %}</strong>
     </p>
     
     <form method="POST" action="{{ url_for('record_action', employee_name=employee_name) }}">
         <input type="hidden" name="action" value="{{ next_action }}">
         {% if next_action == "Enter" %}
-            <button type="submit" class="btn btn-enter">🕐 {{ next_action }}</button>
+            <button type="submit" class="btn btn-enter">🕐 Příchod</button>
         {% else %}
-            <button type="submit" class="btn btn-leave">🚪 {{ next_action }}</button>
+            <button type="submit" class="btn btn-leave">🚪 Odchod</button>
         {% endif %}
     </form>
 </div>
 
 <div class="navigation">
-    <a href="{{ url_for('home') }}" class="btn btn-secondary">Back to Home</a>
+    <a href="{{ url_for('home') }}" class="btn btn-secondary">Zpět na Úvod</a>
 </div>
 {% endblock %}

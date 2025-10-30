@@ -70,7 +70,7 @@ def init_db():
         with app.open_resource('schema.sql', mode='r') as f:
             db.cursor().executescript(f.read())
         db.commit()
-    print("Initialized the database.")
+    print("Databáze byla inicializována.")
 
 # --- Routes ---
 
@@ -229,9 +229,9 @@ def add_employee():
             (employee_name,)
         )
         db.commit()
-        message = f"Employee '{employee_name}' added successfully!"
+        message = f"Zaměstnanec '{employee_name}' byl úspěšně přidán!"
     except sqlite3.IntegrityError:
-        message = f"Employee '{employee_name}' already exists!"
+        message = f"Zaměstnanec '{employee_name}' již existuje!"
     
     # Redirect back to admin with message
     return redirect(url_for('admin_page') + f'?message={message}')
@@ -247,10 +247,10 @@ def toggle_employee(employee_id):
     
     if action == 'disable':
         new_status = 0
-        status_text = 'disabled'
+        status_text = 'deaktivován'
     elif action == 'enable':
         new_status = 1
-        status_text = 'enabled'
+        status_text = 'aktivován'
     else:
         return redirect(url_for('admin_page'))
     
@@ -263,9 +263,9 @@ def toggle_employee(employee_id):
             (new_status, employee_id)
         )
         db.commit()
-        message = f"Employee '{employee['name']}' {status_text} successfully!"
+        message = f"Zaměstnanec '{employee['name']}' byl úspěšně {status_text}!"
     else:
-        message = "Employee not found!"
+        message = "Zaměstnanec nebyl nalezen!"
     
     return redirect(url_for('admin_page') + f'?message={message}')
 
@@ -306,16 +306,17 @@ def export_csv():
     writer = csv.writer(output)
     
     # Write header
-    writer.writerow(['Employee Name', 'Status (Enter/Leave)', 'Date', 'Time'])
+    writer.writerow(['Jméno zaměstnance', 'Stav (Příchod/Odchod)', 'Datum', 'Čas'])
     
     # Write data
     for record in records:
-        writer.writerow([record['employee_name'], record['status'], record['date'], record['time']])
+        status_czech = 'Příchod' if record['status'] == 'Enter' else 'Odchod'
+        writer.writerow([record['employee_name'], status_czech, record['date'], record['time']])
     
     # Create response
     response = make_response(output.getvalue())
     response.headers['Content-Type'] = 'text/csv'
-    response.headers['Content-Disposition'] = f'attachment; filename=attendance_report_{start_date}_to_{end_date}.csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=dochazka_report_{start_date}_do_{end_date}.csv'
     
     return response
 
