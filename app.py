@@ -47,6 +47,99 @@ def verify_password(username, password):
 
 # --- Database Functions ---
 
+def calculate_daily_hours_with_quarters(records):
+    """
+    Calculate daily worked hours with quarter-hour rounding logic.
+    Returns list of dictionaries with employee data including quarter-hour adjustments.
+    """
+    from collections import defaultdict
+    
+    # Group records by employee
+    employee_data = defaultdict(list)
+    
+    for record in records:
+        employee_data[record['employee_name']].append(record)
+    
+    # Calculate hours for each employee
+    result = []
+    
+    for employee_name, emp_records in employee_data.items():
+        # Group by date for this employee
+        daily_records = defaultdict(list)
+        for record in emp_records:
+            daily_records[record['date']].append(record)
+        
+        # Sort dates to process in chronological order
+        sorted_dates = sorted(daily_records.keys())
+        accumulated_minutes = 0  # Running total of minute differences
+        
+        for i, date in enumerate(sorted_dates):
+            day_records = daily_records[date]
+            day_records.sort(key=lambda x: x['time'])
+            
+            # Calculate worked hours for this day
+            total_minutes = 0
+            enter_time = None
+            
+            for record in day_records:
+                time_obj = datetime.strptime(record['time'], '%H:%M:%S').time()
+                minutes_since_midnight = time_obj.hour * 60 + time_obj.minute
+                
+                if record['status'] == 'Enter':
+                    enter_time = minutes_since_midnight
+                elif record['status'] == 'Leave' and enter_time is not None:
+                    total_minutes += minutes_since_midnight - enter_time
+                    enter_time = None
+            
+            # Convert to hours and minutes
+            hours = total_minutes // 60
+            minutes = total_minutes % 60
+            actual_hours = f"{hours}:{minutes:02d}"
+            
+            # Apply quarter-hour logic
+            is_last_day = (i == len(sorted_dates) - 1)
+            
+            if is_last_day:
+                # Last day - apply accumulated difference but don't round
+                final_minutes = total_minutes + accumulated_minutes
+                # Ensure non-negative result
+                final_minutes = max(0, final_minutes)
+                final_hours = final_minutes // 60
+                final_mins = final_minutes % 60
+                quarter_hours = f"{final_hours}:{final_mins:02d}"
+            else:
+                # Not last day - round to nearest quarter
+                adjusted_minutes = total_minutes + accumulated_minutes
+                
+                # Round to nearest quarter (0, 15, 30, 45)
+                remainder = adjusted_minutes % 15
+                if remainder <= 7:
+                    rounded_minutes = adjusted_minutes - remainder
+                else:
+                    rounded_minutes = adjusted_minutes + (15 - remainder)
+                
+                # Ensure non-negative
+                rounded_minutes = max(0, rounded_minutes)
+                
+                # Update accumulated difference for next day
+                accumulated_minutes = adjusted_minutes - rounded_minutes
+                
+                # Format quarter hours
+                q_hours = rounded_minutes // 60
+                q_mins = rounded_minutes % 60
+                quarter_hours = f"{q_hours}:{q_mins:02d}"
+            
+            result.append({
+                'employee_name': employee_name,
+                'date': date,
+                'actual_hours': actual_hours,
+                'quarter_hours': quarter_hours
+            })
+    
+    # Sort by employee name, then by date
+    result.sort(key=lambda x: (x['employee_name'], x['date']))
+    return result
+
 def get_db():
     """Opens a new database connection if there is none yet for the current application context."""
     if 'db' not in g:
@@ -168,6 +261,7 @@ def admin_page():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     employee_filter = request.args.get('employee_filter', '')
+    show_daily_hours = request.args.get('show_daily_hours') == '1'
     message = request.args.get('message')
     
     # Default to previous month if no dates provided
@@ -198,6 +292,11 @@ def admin_page():
     
     attendance_records = db.execute(query, params).fetchall()
     
+    # Calculate daily hours data if requested
+    daily_hours_data = None
+    if show_daily_hours and attendance_records:
+        daily_hours_data = calculate_daily_hours_with_quarters(attendance_records)
+    
     # Fetch all employees for management and filter dropdown
     all_employees = db.execute(
         'SELECT id, name, is_active FROM employees ORDER BY name'
@@ -205,10 +304,12 @@ def admin_page():
     
     return render_template('admin.html',
                          attendance_records=attendance_records,
+                         daily_hours_data=daily_hours_data,
                          all_employees=all_employees,
                          start_date=start_date,
                          end_date=end_date,
                          employee_filter=employee_filter,
+                         show_daily_hours=show_daily_hours,
                          message=message)
 
 @app.route('/add_employee', methods=['POST'])
@@ -317,6 +418,64 @@ def export_csv():
     response = make_response(output.getvalue())
     response.headers['Content-Type'] = 'text/csv'
     response.headers['Content-Disposition'] = f'attachment; filename=dochazka_report_{start_date}_do_{end_date}.csv'
+    
+    return response
+
+@app.route('/export_quarters_csv')
+@auth.login_required
+def export_quarters_csv():
+    """
+    Exports attendance data with quarter-hour calculations to CSV.
+    """
+    db = get_db()
+    
+    # Get filter parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    employee_filter = request.args.get('employee_filter', '')
+    
+    # Build query to get attendance records
+    query = '''
+        SELECT e.name as employee_name, a.status, 
+               date(a.timestamp) as date, 
+               time(a.timestamp) as time
+        FROM attendance a 
+        JOIN employees e ON a.employee_id = e.id 
+        WHERE date(a.timestamp) >= ? AND date(a.timestamp) <= ?
+    '''
+    params = [start_date, end_date]
+    
+    if employee_filter:
+        query += ' AND e.name = ?'
+        params.append(employee_filter)
+    
+    query += ' ORDER BY e.name, a.timestamp'
+    
+    records = db.execute(query, params).fetchall()
+    
+    # Calculate daily hours with quarter-hour logic
+    daily_hours = calculate_daily_hours_with_quarters(records)
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['Jméno', 'Datum', 'Počet odpracovaných hodin', 'Počet na čtvrthodiny'])
+    
+    # Write data
+    for record in daily_hours:
+        writer.writerow([
+            record['employee_name'], 
+            record['date'], 
+            record['actual_hours'], 
+            record['quarter_hours']
+        ])
+    
+    # Create response
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=dochazka_ctvrthod_{start_date}_do_{end_date}.csv'
     
     return response
 

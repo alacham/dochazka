@@ -35,34 +35,70 @@
             </select>
         </div>
         
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="show_daily_hours" value="1" {% if show_daily_hours %}checked{% endif %}>
+                Zobrazit denní hodiny s čtvrthodinami
+            </label>
+        </div>
+        
         <button type="submit" class="btn">Použít filtry</button>
         <a href="{{ url_for('export_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
-           class="btn btn-success" style="margin-left: 10px;">Exportovat do CSV</a>
+           class="btn btn-success" style="margin-left: 10px;">Exportovat základní CSV</a>
+        <a href="{{ url_for('export_quarters_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
+           class="btn btn-success" style="margin-left: 10px;">Exportovat s čtvrthodinami</a>
     </form>
     
-    {% if attendance_records %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Jméno zaměstnance</th>
-                    <th>Stav</th>
-                    <th>Datum</th>
-                    <th>Čas</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for record in attendance_records %}
-                <tr>
-                    <td>{{ record.employee_name }}</td>
-                    <td>{% if record.status == "Enter" %}Příchod{% else %}Odchod{% endif %}</td>
-                    <td>{{ record.date }}</td>
-                    <td>{{ record.time }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% if show_daily_hours %}
+        {% if daily_hours_data %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jméno zaměstnance</th>
+                        <th>Datum</th>
+                        <th>Počet odpracovaných hodin</th>
+                        <th>Počet na čtvrthodiny</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in daily_hours_data %}
+                    <tr>
+                        <td>{{ record.employee_name }}</td>
+                        <td>{{ record.date }}</td>
+                        <td>{{ record.actual_hours }}</td>
+                        <td>{{ record.quarter_hours }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Nebyly nalezeny žádné záznamy pro výpočet denních hodin v daném období.</p>
+        {% endif %}
     {% else %}
-        <p>Nebyly nalezeny žádné záznamy docházky pro vybraná kritéria.</p>
+        {% if attendance_records %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jméno zaměstnance</th>
+                        <th>Stav</th>
+                        <th>Datum</th>
+                        <th>Čas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in attendance_records %}
+                    <tr>
+                        <td>{{ record.employee_name }}</td>
+                        <td>{% if record.status == "Enter" %}Příchod{% else %}Odchod{% endif %}</td>
+                        <td>{{ record.date }}</td>
+                        <td>{{ record.time }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Nebyly nalezeny žádné záznamy docházky pro vybraná kritéria.</p>
+        {% endif %}
     {% endif %}
 </div>
 
