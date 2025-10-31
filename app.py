@@ -122,6 +122,105 @@ def login_required(f):
 
 # --- Database Functions ---
 
+def calculate_entry_exit_pairs(records):
+    """
+    Calculate entry-exit pairs with quarter-hour logic and carry-over.
+    Returns list of dictionaries with paired entries/exits and accumulated minutes.
+    """
+    from collections import defaultdict
+    
+    # Group records by employee
+    employee_data = defaultdict(list)
+    
+    for record in records:
+        employee_data[record['employee_name']].append(record)
+    
+    result = []
+    
+    for employee_name, emp_records in employee_data.items():
+        # Sort by timestamp
+        emp_records.sort(key=lambda x: (x['date'], x['time']))
+        
+        accumulated_minutes = 0  # Running total for quarter-hour logic
+        i = 0
+        
+        # Process each Enter record and look for matching Exit on the same day
+        processed_exits = set()  # Track which exit records we've already used
+        
+        for i, record in enumerate(emp_records):
+            if record['status'] == 'Enter':
+                entry_record = record
+                exit_record = None
+                
+                # Look for matching exit on the same day that hasn't been used yet
+                for j in range(i + 1, len(emp_records)):
+                    if (emp_records[j]['status'] == 'Leave' and 
+                        emp_records[j]['date'] == entry_record['date'] and
+                        j not in processed_exits):
+                        exit_record = emp_records[j]
+                        processed_exits.add(j)  # Mark this exit as used
+                        break
+                    elif emp_records[j]['date'] != entry_record['date']:
+                        # Different date - stop looking for exits on this day
+                        break
+                
+                if exit_record:
+                    # Calculate worked minutes
+                    entry_time = datetime.strptime(f"{entry_record['date']} {entry_record['time']}", '%Y-%m-%d %H:%M:%S')
+                    exit_time = datetime.strptime(f"{exit_record['date']} {exit_record['time']}", '%Y-%m-%d %H:%M:%S')
+                    
+                    worked_minutes = int((exit_time - entry_time).total_seconds() / 60)
+                    
+                    # Apply quarter-hour logic with accumulation
+                    total_minutes = worked_minutes + accumulated_minutes
+                    
+                    # Round to nearest quarter
+                    remainder = total_minutes % 15
+                    if remainder <= 7:
+                        rounded_minutes = total_minutes - remainder
+                    else:
+                        rounded_minutes = total_minutes + (15 - remainder)
+                    
+                    # Ensure non-negative
+                    rounded_minutes = max(0, rounded_minutes)
+                    
+                    # Update accumulated difference for next pair
+                    accumulated_minutes = total_minutes - rounded_minutes
+                    
+                    # Format hours
+                    actual_hours = worked_minutes // 60
+                    actual_mins = worked_minutes % 60
+                    actual_time_str = f"{actual_hours}:{actual_mins:02d}"
+                    
+                    quarter_hours = rounded_minutes // 60
+                    quarter_mins = rounded_minutes % 60
+                    quarter_time_str = f"{quarter_hours}:{quarter_mins:02d}"
+                    
+                    result.append({
+                        'employee_name': employee_name,
+                        'entry_date': entry_record['date'],
+                        'entry_time': entry_record['time'],
+                        'exit_date': exit_record['date'],
+                        'exit_time': exit_record['time'],
+                        'actual_hours': actual_time_str,
+                        'quarter_hours': quarter_time_str,
+                        'carry_over_minutes': accumulated_minutes
+                    })
+                else:
+                    # No matching exit found - show entry with missing exit
+                    result.append({
+                        'employee_name': employee_name,
+                        'entry_date': entry_record['date'],
+                        'entry_time': entry_record['time'],
+                        'exit_date': '-',
+                        'exit_time': '-',
+                        'actual_hours': '-',
+                        'quarter_hours': '-',
+                        'carry_over_minutes': accumulated_minutes
+                    })
+    
+    return result
+
 def calculate_daily_hours_with_quarters(records):
     """
     Calculate daily worked hours with quarter-hour rounding logic.
@@ -386,7 +485,9 @@ def admin_page():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     employee_filter = request.args.get('employee_filter', '')
-    show_daily_hours = request.args.get('show_daily_hours') == '1'
+    view_type = request.args.get('view_type', 'basic')  # basic, daily_hours, entry_exit_pairs
+    show_daily_hours = view_type == 'daily_hours'
+    show_entry_exit_pairs = view_type == 'entry_exit_pairs'
     message = request.args.get('message')
     
     # Default to previous month if no dates provided
@@ -422,6 +523,11 @@ def admin_page():
     if show_daily_hours and attendance_records:
         daily_hours_data = calculate_daily_hours_with_quarters(attendance_records)
     
+    # Calculate entry-exit pairs if requested
+    pairs_data = None
+    if show_entry_exit_pairs and attendance_records:
+        pairs_data = calculate_entry_exit_pairs(attendance_records)
+    
     # Fetch all employees for management and filter dropdown
     all_employees = db.execute(
         'SELECT id, name, is_active FROM employees ORDER BY name'
@@ -430,11 +536,14 @@ def admin_page():
     return render_template('admin.html',
                          attendance_records=attendance_records,
                          daily_hours_data=daily_hours_data,
+                         pairs_data=pairs_data,
                          all_employees=all_employees,
                          start_date=start_date,
                          end_date=end_date,
                          employee_filter=employee_filter,
+                         view_type=view_type,
                          show_daily_hours=show_daily_hours,
+                         show_entry_exit_pairs=show_entry_exit_pairs,
                          message=message)
 
 @app.route('/add_employee', methods=['POST'])
@@ -601,6 +710,85 @@ def export_quarters_csv():
     response = make_response(output.getvalue())
     response.headers['Content-Type'] = 'text/csv'
     response.headers['Content-Disposition'] = f'attachment; filename=dochazka_ctvrthod_{start_date}_do_{end_date}.csv'
+    
+    return response
+
+@app.route('/export_pairs_csv')
+@login_required
+def export_pairs_csv():
+    """
+    Exports entry-exit pairs with quarter-hour calculations to CSV.
+    """
+    db = get_db()
+    
+    # Get filter parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    employee_filter = request.args.get('employee_filter', '')
+    
+    # Build query to get attendance records
+    query = '''
+        SELECT e.name as employee_name, a.status, 
+               date(a.timestamp) as date, 
+               time(a.timestamp) as time
+        FROM attendance a 
+        JOIN employees e ON a.employee_id = e.id 
+        WHERE date(a.timestamp) >= ? AND date(a.timestamp) <= ?
+    '''
+    params = [start_date, end_date]
+    
+    if employee_filter:
+        query += ' AND e.name = ?'
+        params.append(employee_filter)
+    
+    query += ' ORDER BY e.name, a.timestamp'
+    
+    records = db.execute(query, params).fetchall()
+    
+    # Calculate entry-exit pairs
+    pairs = calculate_entry_exit_pairs(records)
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        'Jméno', 
+        'Datum a čas příchodu', 
+        'Datum a čas odchodu', 
+        'Přesný počet hodin', 
+        'Přenos minut do dalšího',
+        'Počet hodin na čtvrthodiny',
+    ])
+    
+    # Write data
+    for pair in pairs:
+        # Format entry datetime
+        if pair['entry_date'] != '-' and pair['entry_time'] != '-':
+            entry_datetime = f"{pair['entry_date']} {pair['entry_time']}"
+        else:
+            entry_datetime = '-'
+        
+        # Format exit datetime
+        if pair['exit_date'] != '-' and pair['exit_time'] != '-':
+            exit_datetime = f"{pair['exit_date']} {pair['exit_time']}"
+        else:
+            exit_datetime = '-'
+        
+        writer.writerow([
+            pair['employee_name'],
+            entry_datetime,
+            exit_datetime,
+            pair['actual_hours'],
+            f"{pair['carry_over_minutes']} min" if pair['carry_over_minutes'] != 0 else "0 min",
+            pair['quarter_hours'],
+        ])
+    
+    # Create response
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=dochazka_pary_{start_date}_do_{end_date}.csv'
     
     return response
 

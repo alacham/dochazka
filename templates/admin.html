@@ -36,20 +36,33 @@
         </div>
         
         <div class="form-group">
-            <label>
-                <input type="checkbox" name="show_daily_hours" value="1" {% if show_daily_hours %}checked{% endif %}>
-                Zobrazit denní hodiny s čtvrthodinami
-            </label>
+            <label>Typ zobrazení dat:</label>
+            <div style="margin-left: 20px;">
+                <label style="display: block; margin: 5px 0;">
+                    <input type="radio" name="view_type" value="basic" {% if view_type == 'basic' %}checked{% endif %}>
+                    Základní záznamy (příchody a odchody)
+                </label>
+                <label style="display: block; margin: 5px 0;">
+                    <input type="radio" name="view_type" value="daily_hours" {% if view_type == 'daily_hours' %}checked{% endif %}>
+                    Denní hodiny s čtvrthodinami
+                </label>
+                <label style="display: block; margin: 5px 0;">
+                    <input type="radio" name="view_type" value="entry_exit_pairs" {% if view_type == 'entry_exit_pairs' %}checked{% endif %}>
+                    Páry příchod-odchod s čtvrthodinami
+                </label>
+            </div>
         </div>
         
         <button type="submit" class="btn">Použít filtry</button>
         <a href="{{ url_for('export_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
            class="btn btn-success" style="margin-left: 10px;">Exportovat základní CSV</a>
         <a href="{{ url_for('export_quarters_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
-           class="btn btn-success" style="margin-left: 10px;">Exportovat s čtvrthodinami</a>
+           class="btn btn-success" style="margin-left: 10px;">Exportovat denní hodiny</a>
+        <a href="{{ url_for('export_pairs_csv', start_date=start_date, end_date=end_date, employee_filter=employee_filter) }}" 
+           class="btn btn-success" style="margin-left: 10px;">Exportovat páry</a>
     </form>
     
-    {% if show_daily_hours %}
+    {% if view_type == 'daily_hours' %}
         {% if daily_hours_data %}
             <table>
                 <thead>
@@ -73,6 +86,53 @@
             </table>
         {% else %}
             <p>Nebyly nalezeny žádné záznamy pro výpočet denních hodin v daném období.</p>
+        {% endif %}
+    {% elif view_type == 'entry_exit_pairs' %}
+        {% if pairs_data %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jméno</th>
+                        <th>Datum a čas příchodu</th>
+                        <th>Datum a čas odchodu</th>
+                        <th>Přesný počet hodin</th>
+                        <th>Přenos minut</th>
+                        <th>Počet hodin na čtvrthodiny</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pair in pairs_data %}
+                    <tr>
+                        <td>{{ pair.employee_name }}</td>
+                        <td>
+                            {% if pair.entry_date != '-' and pair.entry_time != '-' %}
+                                {{ pair.entry_date }} {{ pair.entry_time }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if pair.exit_date != '-' and pair.exit_time != '-' %}
+                                {{ pair.exit_date }} {{ pair.exit_time }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ pair.actual_hours }}</td>
+                        <td>
+                            {% if pair.carry_over_minutes != 0 %}
+                                {{ pair.carry_over_minutes }} min
+                            {% else %}
+                                0 min
+                            {% endif %}
+                        </td>
+                        <td>{{ pair.quarter_hours }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Nebyly nalezeny žádné páry příchod-odchod pro vybraná kritéria.</p>
         {% endif %}
     {% else %}
         {% if attendance_records %}
