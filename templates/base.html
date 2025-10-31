@@ -18,6 +18,14 @@
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
+        .home-container {
+            text-align: center;
+        }
+        .employee-container {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+        }
         h1 {
             color: #333;
             text-align: center;
@@ -31,26 +39,35 @@
         .employee-list {
             list-style: none;
             padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
         }
         .employee-list li {
-            margin: 10px 0;
+            margin: 0;
         }
         .employee-list a, .btn {
             display: inline-block;
             background-color: #007bff;
             color: white;
             text-decoration: none;
-            padding: 12px 20px;
-            border-radius: 5px;
+            padding: 25px 40px;
+            border-radius: 8px;
             text-align: center;
-            min-width: 150px;
+            min-width: 250px;
+            width: 100%;
+            max-width: 400px;
             transition: background-color 0.3s;
             border: none;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 22px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .employee-list a:hover, .btn:hover {
             background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
         .btn-enter {
             background-color: #28a745;
@@ -123,9 +140,40 @@
             text-align: center;
             margin: 30px 0;
         }
+        .logout-section {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .logout-btn {
+            background-color: #dc3545;
+            color: white;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            transition: background-color 0.3s;
+        }
+        .logout-btn:hover {
+            background-color: #c82333;
+            text-decoration: none;
+            color: white;
+        }
     </style>
 </head>
 <body>
+    <!-- Logout section (only show if not on login page) -->
+    {% if request.endpoint != 'login_page' %}
+    <div class="logout-section">
+        <a href="{{ url_for('logout') }}" class="logout-btn" 
+           onclick="return confirm('Opravdu se chcete odhlásit?')">Odhlásit se</a>
+    </div>
+    {% endif %}
+    
     <div class="container">
         {% block content %}{% endblock %}
     </div>

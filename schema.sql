@@ -15,3 +15,12 @@ CREATE TABLE IF NOT EXISTS attendance (
     timestamp TEXT NOT NULL, -- Stored as ISO 8601 string
     FOREIGN KEY (employee_id) REFERENCES employees (id)
 );
+
+-- Table to store authentication tokens
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1
+);

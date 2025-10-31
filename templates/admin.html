@@ -157,6 +157,16 @@
     {% endif %}
 </div>
 
+<div class="admin-section">
+    <h2>Zabezpečení</h2>
+    <div class="form-group">
+        <a href="{{ url_for('logout_all') }}" class="btn btn-danger" 
+           onclick="return confirm('Opravdu chcete odhlásit všechna zařízení? Budete muset se přihlásit znovu.')">
+            Odhlásit všechna zařízení
+        </a>
+    </div>
+</div>
+
 <div class="navigation">
     <a href="{{ url_for('home') }}" class="btn btn-secondary">Zpět na úvod</a>
 </div>

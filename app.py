@@ -1,11 +1,14 @@
 # Import necessary libraries
-from flask import Flask, render_template, request, redirect, url_for, g, make_response
+from flask import Flask, render_template, request, redirect, url_for, g, make_response, session
 from flask_httpauth import HTTPBasicAuth
 import sqlite3
 from datetime import datetime, timedelta
 import pytz # Library to handle timezones
 import csv
 import io
+import secrets
+import hashlib
+from functools import wraps
 
 # --- Configuration ---
 
@@ -37,13 +40,85 @@ auth = HTTPBasicAuth()
 
 # --- Security ---
 
-# This function defines the simple authentication logic
+# This function defines the simple authentication logic (kept for compatibility)
 @auth.verify_password
 def verify_password(username, password):
     """Verifies the provided username and password."""
     if username == USERNAME and password == PASSWORD:
         return username
     return None
+
+# --- Token-based Authentication ---
+
+def generate_auth_token():
+    """Generate a secure random token for authentication."""
+    return secrets.token_urlsafe(32)
+
+def hash_token(token):
+    """Create a hash of the token for secure storage."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def create_auth_token():
+    """Create and store a new authentication token."""
+    token = generate_auth_token()
+    token_hash = hash_token(token)
+    
+    # Store token in database with expiration (e.g., 365 days)
+    db = get_db()
+    expiry_date = datetime.now(TIMEZONE) + timedelta(days=365)
+    
+    # Initialize auth_tokens table if it doesn't exist
+    db.execute('''CREATE TABLE IF NOT EXISTS auth_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_hash TEXT UNIQUE NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1
+    )''')
+    
+    db.execute(
+        'INSERT INTO auth_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?)',
+        (token_hash, datetime.now(TIMEZONE).isoformat(), expiry_date.isoformat())
+    )
+    db.commit()
+    
+    return token
+
+def validate_auth_token(token):
+    """Validate if the provided token is valid and not expired."""
+    if not token:
+        return False
+    
+    token_hash = hash_token(token)
+    db = get_db()
+    
+    # Check if token exists and is not expired
+    result = db.execute('''
+        SELECT id FROM auth_tokens 
+        WHERE token_hash = ? AND is_active = 1 AND datetime(expires_at) > datetime(?)
+    ''', (token_hash, datetime.now(TIMEZONE).isoformat())).fetchone()
+    
+    return result is not None
+
+def invalidate_all_tokens():
+    """Invalidate all authentication tokens (for logout all)."""
+    db = get_db()
+    db.execute('UPDATE auth_tokens SET is_active = 0')
+    db.commit()
+
+def login_required(f):
+    """Custom decorator to check for valid authentication token in cookies."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Check for auth token in cookies
+        auth_token = request.cookies.get('auth_token')
+        
+        if not auth_token or not validate_auth_token(auth_token):
+            # Redirect to login page if not authenticated
+            return redirect(url_for('login_page'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 # --- Database Functions ---
 
@@ -167,8 +242,58 @@ def init_db():
 
 # --- Routes ---
 
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    """Login page with form authentication."""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        remember_me = request.form.get('remember_me') == '1'
+        
+        # Verify credentials
+        if username == USERNAME and password == PASSWORD:
+            # Create auth token
+            token = create_auth_token()
+            
+            # Redirect to home page
+            response = make_response(redirect(url_for('home')))
+            
+            # Set cookie with long expiration if remember_me is checked
+            if remember_me:
+                # 1 year expiration
+                response.set_cookie('auth_token', token, max_age=365*24*60*60, httponly=True, secure=False)
+            else:
+                # Session cookie (until browser closes)
+                response.set_cookie('auth_token', token, httponly=True, secure=False)
+            
+            return response
+        else:
+            # Invalid credentials
+            return render_template('login.html', 
+                                 error_message="Nesprávné uživatelské jméno nebo heslo.",
+                                 username=username)
+    
+    # GET request - show login form
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout route - clears the auth token cookie."""
+    response = make_response(redirect(url_for('login_page')))
+    response.set_cookie('auth_token', '', expires=0)
+    return response
+
+@app.route('/logout-all')
+@login_required
+def logout_all():
+    """Logout from all devices - invalidates all tokens."""
+    invalidate_all_tokens()
+    response = make_response(redirect(url_for('login_page')))
+    response.set_cookie('auth_token', '', expires=0)
+    return response
+
 @app.route('/')
-@auth.login_required # This decorator protects the route
+@login_required # Using new token-based decorator
 def home():
     """
     Home Page: Displays a list of active employees.
@@ -179,10 +304,10 @@ def home():
         'SELECT id, name FROM employees WHERE is_active = 1 ORDER BY name'
     ).fetchall()
     
-    return render_template('home.html', employees=employees, current_user=auth.current_user())
+    return render_template('home.html', employees=employees, current_user=USERNAME)
 
 @app.route('/action/<string:employee_name>')
-@auth.login_required
+@login_required
 def action_page(employee_name):
     """
     Action Page: Shows 'Enter' or 'Leave' button for a specific employee.
@@ -216,7 +341,7 @@ def action_page(employee_name):
                          next_action=next_action)
 
 @app.route('/record/<string:employee_name>', methods=['POST'])
-@auth.login_required
+@login_required
 def record_action(employee_name):
     """
     Records the attendance action (Enter/Leave) for an employee.
@@ -250,7 +375,7 @@ def record_action(employee_name):
     return redirect(url_for('home'))
 
 @app.route('/admin')
-@auth.login_required
+@login_required
 def admin_page():
     """
     Admin Page: For viewing reports and managing employees.
@@ -313,7 +438,7 @@ def admin_page():
                          message=message)
 
 @app.route('/add_employee', methods=['POST'])
-@auth.login_required
+@login_required
 def add_employee():
     """
     Adds a new employee to the database.
@@ -338,7 +463,7 @@ def add_employee():
     return redirect(url_for('admin_page') + f'?message={message}')
 
 @app.route('/toggle_employee/<int:employee_id>', methods=['POST'])
-@auth.login_required
+@login_required
 def toggle_employee(employee_id):
     """
     Toggles employee active/inactive status.
@@ -371,7 +496,7 @@ def toggle_employee(employee_id):
     return redirect(url_for('admin_page') + f'?message={message}')
 
 @app.route('/export_csv')
-@auth.login_required
+@login_required
 def export_csv():
     """
     Exports attendance records to CSV based on filters.
@@ -422,7 +547,7 @@ def export_csv():
     return response
 
 @app.route('/export_quarters_csv')
-@auth.login_required
+@login_required
 def export_quarters_csv():
     """
     Exports attendance data with quarter-hour calculations to CSV.
