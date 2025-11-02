@@ -9,14 +9,20 @@ import io
 import secrets
 import hashlib
 from functools import wraps
+import requests
+import threading
+import json
 
 # --- Configuration ---
 
 import os
 try:
     # Try to import local config file
-    from config import USERNAME, PASSWORD, DATABASE_PATH, TIMEZONE_NAME, SECRET_KEY, DEBUG as CONFIG_DEBUG, PORT, HOST
+    from config import USERNAME, PASSWORD, DATABASE_PATH, TIMEZONE_NAME, SECRET_KEY, DEBUG as CONFIG_DEBUG, PORT, HOST,\
+        TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
     DATABASE = os.getenv('DATABASE', DATABASE_PATH)
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', TELEGRAM_BOT_TOKEN)
+    TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID)
     TIMEZONE = pytz.timezone(TIMEZONE_NAME)
     APP_PORT = int(os.getenv('PORT', PORT))
     APP_HOST = os.getenv('HOST', HOST)
@@ -25,6 +31,8 @@ except ImportError:
     USERNAME = os.getenv('ATTENDANCE_USERNAME', 'admin')
     PASSWORD = os.getenv('ATTENDANCE_PASSWORD', 'password')
     DATABASE = os.getenv('DATABASE', 'attendance.db')
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
     TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Prague'))
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     CONFIG_DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
@@ -119,6 +127,49 @@ def login_required(f):
         
         return f(*args, **kwargs)
     return decorated_function
+
+# --- Telegram Notifications ---
+
+def _send_telegram_message_async(employee_name, action, timestamp):
+    """Internal function to send Telegram message in background thread."""
+    try:
+        # Format timestamp
+        dt = datetime.strptime(f"{timestamp['date']} {timestamp['time']}", "%Y-%m-%d %H:%M:%S")
+        formatted_time = dt.strftime("%d.%m.%Y %H:%M")
+        
+        # Create message
+        action_text = "příchod" if action == "in" else "odchod"
+        message = f"{employee_name}:\n {formatted_time} - {action_text}"
+        
+        # Send to Telegram
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': message,
+            'parse_mode': 'Markdown'
+        }
+        
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            pass
+        else:
+            print(f"Failed to send Telegram notification: {response.status_code} - {response.text}")
+            
+    except Exception as e:
+        print(f"Error sending Telegram notification: {e}")
+
+def send_telegram_notification(employee_name, action, timestamp):
+    """Send notification to Telegram group asynchronously if token and chat ID are configured."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return  # Skip if Telegram is not configured
+    
+    # Start background thread for Telegram notification
+    telegram_thread = threading.Thread(
+        target=_send_telegram_message_async,
+        args=(employee_name, action, timestamp),
+        daemon=True  # Thread will die when main program exits
+    )
+    telegram_thread.start()
 
 # --- Database Functions ---
 
@@ -469,6 +520,14 @@ def record_action(employee_name):
         (employee['id'], action, timestamp)
     )
     db.commit()
+    
+    # Send Telegram notification if configured
+    telegram_action = "in" if action == "Enter" else "out"
+    send_telegram_notification(
+        employee_name,
+        telegram_action,
+        {'date': now.strftime('%Y-%m-%d'), 'time': now.strftime('%H:%M:%S')}
+    )
     
     # Redirect back to home page after successful action
     return redirect(url_for('home'))
